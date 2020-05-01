@@ -1,54 +1,42 @@
 #!/usr/bin/env python
-#
-# dockbar.py
-#
-# Example program places a coloured bar across the top of the
-# current monitor
-#
-# demonstrates
-#
-# (a) creating the bar as an undecorated "dock" window
-# (b) setting its colour
-# (c) getting the number of monitors and their sizes
-#
-#                                               JL 20140512, 20170220
-
+from typing import Optional
+from threading import Timer
+import os
+import argparse
 import gi
-
-gi.require_version('Gtk', '3.0')
+from gi.repository.GdkPixbuf import Pixbuf
 from gi.repository import Gtk, Gdk
 from Xlib.display import Display
 from Xlib import X
 
-import argparse
+gi.require_version('Gtk', '3.0')
 
 # Colour style for (b)
 stylesheet = b"""
 window#bar {
   background-color: darkred;
 }
+
+GtkWidget { padding-left: 0; padding-right: 0; padding: 0; margin: 0;}
 """
 
-#  the size of the bar (its height), in pixels
-bar_size = 50
+bar_size = 35
 
-
+# Dock bar implementation modified from https://gist.github.com/johnlane/351adff97df196add08a
 class TestBar(Gtk.Window):
 
-    def __init__(self, message: str):
+    def __init__(self, message: str, application: str, icon_path: Optional[str] = None, timeout: Optional[int] = -1):
         # Version information
         print("Gtk %d.%d.%d" % (Gtk.get_major_version(),
                                 Gtk.get_minor_version(),
                                 Gtk.get_micro_version()))
 
-        # (a) Create an undecorated dock
         Gtk.Window.__init__(self)
         self.set_name("bar")
         self.set_type_hint(Gdk.WindowTypeHint.DOCK)
         self.set_decorated(False)
         self.connect("delete-event", Gtk.main_quit)
 
-        # (b) Style it
         style_provider = Gtk.CssProvider()
         style_provider.load_from_data(stylesheet)
         Gtk.StyleContext.add_provider_for_screen(
@@ -59,10 +47,26 @@ class TestBar(Gtk.Window):
         hbox = Gtk.Box(spacing=10)
         hbox.set_homogeneous(False)
 
+        if icon_path is not None:
+            liststore = Gtk.ListStore(Pixbuf, str)
+            iconview = Gtk.IconView.new()
+            iconview.set_model(liststore)
+            iconview.set_pixbuf_column(0)
+            iconview.set_text_column(1)
+            iconview.set_selection_mode(Gtk.SelectionMode.NONE)
+            # iconview.set_item_width(24)
+            # iconview.set_item_height(24)
+            # TODO: Deal with errors
+            liststore.append([Pixbuf.new_from_file_at_scale(os.path.abspath(icon_path), width=24,
+                                                            height=24,
+                                                            preserve_aspect_ratio=True), application])
+
+            hbox.pack_start(iconview, False, False, 0)
+
         label = Gtk.Label()
         label.set_text(message)
 
-        #label.set_justify(Gtk.Justification.LEFT)
+        # label.set_justify(Gtk.Justification.LEFT)
 
         hbox.pack_start(label, False, True, 0)
 
@@ -101,7 +105,8 @@ class TestBar(Gtk.Window):
 
         # it must be shown before changing properties
         self.show_all()
-        print("Window shown")
+        print(f"Window shown. Size {self.get_size()}")
+        print(f"Window shown. Size {self.get_size()}")
         # (d) reserve space (a "strut") for the bar so it does not become obscured
         #     when other windows are maximized, etc
         # http://stackoverflow.com/questions/33719686  property_change not in gtk3.0
@@ -147,12 +152,18 @@ class TestBar(Gtk.Window):
         # https://bugzilla.gnome.org/show_bug.cgi?id=622084
         from gi.repository import GLib
 
+        print(f"Timeout {timeout}")
+        if timeout > 0:
+            Timer(timeout, self.quit).start()
+
         print("Running main loop")
         Gtk.main()
 
     def done(self, button):
-        Gtk.main_quit()
+        self.quit()
 
+    def quit(self):
+        Gtk.main_quit()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Display a notification bar')
@@ -160,9 +171,11 @@ if __name__ == "__main__":
     parser.add_argument('-u', '--urgency', choices=urgencies, help=f"Notification urgency {urgencies}",
                         default=urgencies[1])
     parser.add_argument('-m', '--message', type=str, help="Message to display")
+    parser.add_argument('-a', '--application', type=str)
     parser.add_argument('-b', '--button', nargs='+')
-    parser.add_argument('-t', '--timeout', type=int, default=20)
+    parser.add_argument('-t', '--timeout', type=int, default=-1)
+    parser.add_argument('-i', '--icon', type=str, required=False, default=None)
     args = parser.parse_args()
     print(args)
 
-    TestBar(args.message)
+    TestBar(args.message, args.application, args.icon, args.timeout)
