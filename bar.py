@@ -4,12 +4,29 @@ from threading import Timer
 import os
 import argparse
 import gi
+from dbus import SessionBus
+
+gi.require_version('Gtk', '3.0')
+gi.require_version('GdkPixbuf', '2.0')
+gi.require_version('Notify', '0.7')
 from gi.repository.GdkPixbuf import Pixbuf
 from gi.repository import Gtk, Gdk
 from Xlib.display import Display
 from Xlib import X
+import dbus
+from dbus.mainloop.glib import DBusGMainLoop
+import dbus.service
 
-gi.require_version('Gtk', '3.0')
+
+class ActionInvoker(dbus.service.Object):
+    def __init__(self):
+        bus_name = dbus.service.BusName('org.freedesktop.Notifications', bus=dbus.SessionBus())
+        dbus.service.Object.__init__(self, bus_name, '/org/freedesktop/Notifications')
+
+    @dbus.service.signal("org.freedesktop.Notifications", signature='us')
+    def ActionInvoked(self, id_in, action_key_in):
+        print(f"ActionInvoked {id_in} {action_key_in}")
+        pass
 
 # Colour style for (b)
 stylesheet = b"""
@@ -22,16 +39,27 @@ GtkWidget { padding-left: 0; padding-right: 0; padding: 0; margin: 0;}
 
 bar_size = 35
 
+
 # Dock bar implementation modified from https://gist.github.com/johnlane/351adff97df196add08a
 class TestBar(Gtk.Window):
 
-    def __init__(self, message: str, application: str, icon_path: Optional[str] = None, timeout: Optional[int] = -1):
+    def __init__(self, summary: str, body: str, application: str, icon_path: Optional[str] = None,
+                 timeout: Optional[int] = -1):
+        # Set up empty window and add style
+        Gtk.Window.__init__(self)
+
+        # No need to provide a mainloop, as we are only sending
+
         # Version information
         print("Gtk %d.%d.%d" % (Gtk.get_major_version(),
                                 Gtk.get_minor_version(),
                                 Gtk.get_micro_version()))
+        self.body = body
+        self.summary = summary
+        self.application = application
+        self.icon_path = icon_path
+        self.timeout = timeout
 
-        Gtk.Window.__init__(self)
         self.set_name("bar")
         self.set_type_hint(Gdk.WindowTypeHint.DOCK)
         self.set_decorated(False)
@@ -44,37 +72,29 @@ class TestBar(Gtk.Window):
             style_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
-        hbox = Gtk.Box(spacing=10)
-        hbox.set_homogeneous(False)
+        # Layout container
+        self.hbox = Gtk.Box(spacing=10)
+        self.hbox.set_homogeneous(False)
 
         if icon_path is not None:
-            liststore = Gtk.ListStore(Pixbuf, str)
-            iconview = Gtk.IconView.new()
-            iconview.set_model(liststore)
-            iconview.set_pixbuf_column(0)
-            iconview.set_text_column(1)
-            iconview.set_selection_mode(Gtk.SelectionMode.NONE)
-            # iconview.set_item_width(24)
-            # iconview.set_item_height(24)
-            # TODO: Deal with errors
-            liststore.append([Pixbuf.new_from_file_at_scale(os.path.abspath(icon_path), width=24,
-                                                            height=24,
-                                                            preserve_aspect_ratio=True), application])
+            self._init_icon()
 
-            hbox.pack_start(iconview, False, False, 0)
-
-        label = Gtk.Label()
-        label.set_text(message)
+        self.message = Gtk.Label()
+        if self.body is None:
+            message_str = "<b>{}</b>".format(self.summary)
+        else:
+            message_str = "<b>{}</b>\n{}".format(self.summary, self.body)
+        self.message.set_markup(message_str)
 
         # label.set_justify(Gtk.Justification.LEFT)
 
-        hbox.pack_start(label, False, True, 0)
+        self.hbox.pack_start(self.message, False, True, 0)
 
         button = Gtk.Button.new_with_mnemonic("_OK")
         button.connect("clicked", self.done)
-        hbox.pack_end(button, False, False, 0)
+        self.hbox.pack_end(button, False, False, 0)
 
-        self.add(hbox)
+        self.add(self.hbox)
 
         # the screen contains all monitors
         screen = self.get_screen()
@@ -159,11 +179,37 @@ class TestBar(Gtk.Window):
         print("Running main loop")
         Gtk.main()
 
+    def _init_icon(self):
+        liststore = Gtk.ListStore(Pixbuf, str)
+        iconview = Gtk.IconView.new()
+        iconview.set_model(liststore)
+        iconview.set_pixbuf_column(0)
+        iconview.set_text_column(1)
+        iconview.set_selection_mode(Gtk.SelectionMode.NONE)
+        # TODO: Deal with errors
+        liststore.append([Pixbuf.new_from_file_at_scale(os.path.abspath(self.icon_path), width=24,
+                                                        height=24,
+                                                        preserve_aspect_ratio=True), self.application])
+
+        self.hbox.pack_start(iconview, False, False, 0)
+
+    def _init_buttons(self):
+        pass
+
     def done(self, button):
         self.quit()
 
+    def invoke_action(self, button):
+        DBusGMainLoop(set_as_default=True)
+        invoker = ActionInvoker()
+
+        invoker.ActionInvoked(10, "test") # TODO
+        invoker.remove_from_connection()
+        Gtk.main_quit()
+
     def quit(self):
         Gtk.main_quit()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Display a notification bar')
@@ -171,11 +217,20 @@ if __name__ == "__main__":
     parser.add_argument('-u', '--urgency', choices=urgencies, help=f"Notification urgency {urgencies}",
                         default=urgencies[1])
     parser.add_argument('-m', '--message', type=str, help="Message to display")
+    parser.add_argument('-s', '--summary', type=str)
+    parser.add_argument('-b', '--body', type=str)
     parser.add_argument('-a', '--application', type=str)
-    parser.add_argument('-b', '--button', nargs='+')
-    parser.add_argument('-t', '--timeout', type=int, default=-1)
+    # parser.add_argument('-b', '--button', nargs='+')
+    parser.add_argument('-t', '--expire-time', type=int, default=-1, dest='timeout')
     parser.add_argument('-i', '--icon', type=str, required=False, default=None)
+
+    # Arguments not needed for now
+    # http://www.galago-project.org/specs/notification/0.9/x211.html
+    # parser.add_argument('-c', '--category')
+    # Also hints
+    # http://www.galago-project.org/specs/notification/0.9/x344.html
+
     args = parser.parse_args()
     print(args)
 
-    TestBar(args.message, args.application, args.icon, args.timeout)
+    TestBar(args.summary, args.body, args.application, args.icon, args.timeout)
