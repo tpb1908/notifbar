@@ -17,7 +17,6 @@ import gi
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
-import Xlib
 from Xlib.display import Display
 from Xlib import X
 
@@ -61,9 +60,14 @@ class TestBar(Gtk.Window):
 
         label = Gtk.Label()
         label.set_text(message)
-        label.set_justify(Gtk.Justification.LEFT)
+
+        #label.set_justify(Gtk.Justification.LEFT)
 
         hbox.pack_start(label, True, True, 0)
+
+        button = Gtk.Button.new_with_mnemonic("_OK")
+        button.connect("clicked", self.done)
+        hbox.pack_start(button, False, False, 0)
 
         self.add(hbox)
 
@@ -143,7 +147,10 @@ class TestBar(Gtk.Window):
         from gi.repository import GLib
 
         print("Running main loop")
-        GLib.MainLoop().run()
+        Gtk.main()
+
+    def done(self, button):
+        Gtk.main_quit()
 
 
 if __name__ == "__main__":
@@ -153,7 +160,7 @@ if __name__ == "__main__":
                         default=urgencies[1])
     parser.add_argument('-m', '--message', type=str, help="Message to display")
     parser.add_argument('-b', '--button', nargs='+')
-
+    parser.add_argument('-t', '--timeout', type=int, default=20)
     args = parser.parse_args()
     print(args)
 
