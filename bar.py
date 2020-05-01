@@ -14,14 +14,17 @@
 #                                               JL 20140512, 20170220
 
 import gi
-gi.require_version('Gtk','3.0')
+
+gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 import Xlib
 from Xlib.display import Display
 from Xlib import X
 
+import argparse
+
 # Colour style for (b)
-stylesheet=b"""
+stylesheet = b"""
 window#bar {
   background-color: darkred;
 }
@@ -30,20 +33,21 @@ window#bar {
 #  the size of the bar (its height), in pixels
 bar_size = 50
 
-class TestBar:
 
-    def __init__(self):
+class TestBar(Gtk.Window):
+
+    def __init__(self, message: str):
         # Version information
         print("Gtk %d.%d.%d" % (Gtk.get_major_version(),
                                 Gtk.get_minor_version(),
                                 Gtk.get_micro_version()))
 
         # (a) Create an undecorated dock
-        window = Gtk.Window()
-        window.set_name("bar")
-        window.set_type_hint(Gdk.WindowTypeHint.DOCK)
-        window.set_decorated(False)
-        window.connect("delete-event", Gtk.main_quit)
+        Gtk.Window.__init__(self)
+        self.set_name("bar")
+        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+        self.set_decorated(False)
+        self.connect("delete-event", Gtk.main_quit)
 
         # (b) Style it
         style_provider = Gtk.CssProvider()
@@ -53,8 +57,18 @@ class TestBar:
             style_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
+        hbox = Gtk.Box(spacing=10)
+
+        label = Gtk.Label()
+        label.set_text(message)
+        label.set_justify(Gtk.Justification.LEFT)
+
+        hbox.pack_start(label, True, True, 0)
+
+        self.add(hbox)
+
         # the screen contains all monitors
-        screen = window.get_screen()
+        screen = self.get_screen()
         width = screen.width()  # width = Gdk.Screen.width()
         print("width: %d" % width)
 
@@ -77,11 +91,11 @@ class TestBar:
         print("bar: start=%d end=%d" % (x, x + width - 1))
 
         # display bar along the top of the current monitor
-        window.move(x, y)
-        window.resize(width, bar_size)
+        self.move(x, y)
+        self.resize(width, bar_size)
 
         # it must be shown before changing properties
-        window.show_all()
+        self.show_all()
         print("Window shown")
         # (d) reserve space (a "strut") for the bar so it does not become obscured
         #     when other windows are maximized, etc
@@ -89,7 +103,7 @@ class TestBar:
         # https://sourceforge.net/p/python-xlib/mailman/message/27574603
         display = Display()
         topw = display.create_resource_object('window',
-                                              window.get_toplevel().get_window().get_xid())
+                                              self.get_toplevel().get_window().get_xid())
 
         # http://python-xlib.sourceforge.net/doc/html/python-xlib_21.html#SEC20
         topw.change_property(display.intern_atom('_NET_WM_STRUT'),
@@ -127,14 +141,20 @@ class TestBar:
         # Control-C termination broken in GTK3 http://stackoverflow.com/a/33834721
         # https://bugzilla.gnome.org/show_bug.cgi?id=622084
         from gi.repository import GLib
-        # self.mainloop = GObject.MainLoop()
-        # try:
-        #     self.mainloop.run()
-        # except KeyboardInterrupt:
-        #     print("Keyboard interrupt")
-        #     self.mainloop.quit()
+
         print("Running main loop")
         GLib.MainLoop().run()
 
+
 if __name__ == "__main__":
-    TestBar()
+    parser = argparse.ArgumentParser(description='Display a notification bar')
+    urgencies = ["low", "normal", "critical"]
+    parser.add_argument('-u', '--urgency', choices=urgencies, help=f"Notification urgency {urgencies}",
+                        default=urgencies[1])
+    parser.add_argument('-m', '--message', type=str, help="Message to display")
+    parser.add_argument('-b', '--button', nargs='+')
+
+    args = parser.parse_args()
+    print(args)
+
+    TestBar(args.message)
