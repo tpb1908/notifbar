@@ -57,17 +57,18 @@ class TestBar(Gtk.Window):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         hbox = Gtk.Box(spacing=10)
+        hbox.set_homogeneous(False)
 
         label = Gtk.Label()
         label.set_text(message)
 
         #label.set_justify(Gtk.Justification.LEFT)
 
-        hbox.pack_start(label, True, True, 0)
+        hbox.pack_start(label, False, True, 0)
 
         button = Gtk.Button.new_with_mnemonic("_OK")
         button.connect("clicked", self.done)
-        hbox.pack_start(button, False, False, 0)
+        hbox.pack_end(button, False, False, 0)
 
         self.add(hbox)
 
