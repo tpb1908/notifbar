@@ -92,7 +92,7 @@ class TestBar(Gtk.Window):
         #     Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         # Layout container
-        self.hbox = Gtk.Box(spacing=10)
+        self.hbox = Gtk.Box(spacing=5)
         self.hbox.set_homogeneous(False)
 
         if icon_path is not None:
@@ -203,6 +203,8 @@ class TestBar(Gtk.Window):
         iconview.set_pixbuf_column(0)
         iconview.set_text_column(1)
         iconview.set_selection_mode(Gtk.SelectionMode.NONE)
+        iconview.set_item_orientation(Gtk.Orientation.HORIZONTAL)
+        iconview.set_item_padding(0)
         # TODO: Deal with errors
         liststore.append([Pixbuf.new_from_file_at_scale(os.path.abspath(self.icon_path), width=24,
                                                         height=24,
