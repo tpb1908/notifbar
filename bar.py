@@ -1,8 +1,10 @@
 #!/usr/bin/env python
-from typing import Optional
+from typing import Optional, List
 from threading import Timer
 import os
 import argparse
+from warnings import warn
+
 import gi
 from dbus import SessionBus
 
@@ -19,14 +21,29 @@ import dbus.service
 
 
 class ActionInvoker(dbus.service.Object):
-    def __init__(self):
-        bus_name = dbus.service.BusName('org.freedesktop.Notifications', bus=dbus.SessionBus())
-        dbus.service.Object.__init__(self, bus_name, '/org/freedesktop/Notifications')
+    NOTIFICATIONS_DBUS_INTERFACE = 'org.freedesktop.Notifications'
+    NOTIFICATIONS_DBUS_OBJECT_PATH = '/org/freedesktop/Notifications'
 
-    @dbus.service.signal("org.freedesktop.Notifications", signature='us')
+    def __init__(self):
+        #bus_name = dbus.service.BusName(self.NOTIFICATIONS_DBUS_INTERFACE, bus=dbus.SessionBus())
+        #dbus.service.Object.__init__(self, bus_name, self.NOTIFICATIONS_DBUS_OBJECT_PATH)
+        super().__init__(
+            object_path=self.NOTIFICATIONS_DBUS_OBJECT_PATH,
+            bus_name=dbus.service.BusName(
+                name=self.NOTIFICATIONS_DBUS_INTERFACE,
+                bus=SessionBus(mainloop=DBusGMainLoop())
+            )
+        )
+
+    @dbus.service.signal(NOTIFICATIONS_DBUS_INTERFACE, signature='us')
     def ActionInvoked(self, id_in, action_key_in):
         print(f"ActionInvoked {id_in} {action_key_in}")
         pass
+
+    @dbus.service.signal(NOTIFICATIONS_DBUS_INTERFACE, signature='uu')
+    def NotificationClosed(self, id_in, reason_in):
+        pass
+
 
 # Colour style for (b)
 stylesheet = b"""
@@ -43,8 +60,8 @@ bar_size = 35
 # Dock bar implementation modified from https://gist.github.com/johnlane/351adff97df196add08a
 class TestBar(Gtk.Window):
 
-    def __init__(self, summary: str, body: str, application: str, icon_path: Optional[str] = None,
-                 timeout: Optional[int] = -1):
+    def __init__(self, notification: int, summary: str, body: str, application: str, icon_path: Optional[str] = None,
+                 timeout: Optional[int] = -1, actions: Optional[List[List]] = None):
         # Set up empty window and add style
         Gtk.Window.__init__(self)
 
@@ -54,11 +71,13 @@ class TestBar(Gtk.Window):
         print("Gtk %d.%d.%d" % (Gtk.get_major_version(),
                                 Gtk.get_minor_version(),
                                 Gtk.get_micro_version()))
+        self.notification = notification
         self.body = body
         self.summary = summary
         self.application = application
         self.icon_path = icon_path
         self.timeout = timeout
+        self.actions = actions
 
         self.set_name("bar")
         self.set_type_hint(Gdk.WindowTypeHint.DOCK)
@@ -85,11 +104,9 @@ class TestBar(Gtk.Window):
         else:
             message_str = "<b>{}</b>\n{}".format(self.summary, self.body)
         self.message.set_markup(message_str)
-
-        # label.set_justify(Gtk.Justification.LEFT)
-
         self.hbox.pack_start(self.message, False, True, 0)
 
+        self._init_action_buttons()
         button = Gtk.Button.new_with_mnemonic("_OK")
         button.connect("clicked", self.done)
         self.hbox.pack_end(button, False, False, 0)
@@ -193,19 +210,37 @@ class TestBar(Gtk.Window):
 
         self.hbox.pack_start(iconview, False, False, 0)
 
-    def _init_buttons(self):
+    def _init_action_buttons(self):
+        for action in self.actions:
+            if len(action) != 2:
+                warn(f"Action {action} invalid format. Should be two parts")
+            button = Gtk.Button(label=action[1])
+            button.connect("clicked", self.invoke_action)
+            self.hbox.pack_end(button, False, False, 0)
         pass
 
     def done(self, button):
         self.quit()
 
     def invoke_action(self, button):
-        DBusGMainLoop(set_as_default=True)
-        invoker = ActionInvoker()
 
-        invoker.ActionInvoked(10, "test") # TODO
-        invoker.remove_from_connection()
-        Gtk.main_quit()
+        for action in self.actions:
+            if button.get_label() == action[1]:
+                DBusGMainLoop(set_as_default=True)
+                invoker = ActionInvoker()
+
+                invoker.ActionInvoked(self.notification, action[0])
+                invoker.remove_from_connection()
+
+                print(f"Button pressed. Label {button.get_label()}")
+
+                Gtk.main_quit()
+                return
+
+        # I don't think this will happen, but working off the label strings seems fragile
+        warn(f"No matching action found for button label {button.get_label()}. Actions {self.actions}")
+
+
 
     def quit(self):
         Gtk.main_quit()
@@ -216,6 +251,7 @@ if __name__ == "__main__":
     urgencies = ["low", "normal", "critical"]
     parser.add_argument('-u', '--urgency', choices=urgencies, help=f"Notification urgency {urgencies}",
                         default=urgencies[1])
+    parser.add_argument('-n', '--notification', type=int, help="Notification id")
     parser.add_argument('-m', '--message', type=str, help="Message to display")
     parser.add_argument('-s', '--summary', type=str)
     parser.add_argument('-b', '--body', type=str)
@@ -223,7 +259,7 @@ if __name__ == "__main__":
     # parser.add_argument('-b', '--button', nargs='+')
     parser.add_argument('-t', '--expire-time', type=int, default=-1, dest='timeout')
     parser.add_argument('-i', '--icon', type=str, required=False, default=None)
-
+    parser.add_argument('-e', '--actions', action='append', nargs=2, metavar=('identifier', 'name'))
     # Arguments not needed for now
     # http://www.galago-project.org/specs/notification/0.9/x211.html
     # parser.add_argument('-c', '--category')
@@ -233,4 +269,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
 
-    TestBar(args.summary, args.body, args.application, args.icon, args.timeout)
+    TestBar(args.notification, args.summary, args.body, args.application, args.icon, args.timeout, args.actions)
