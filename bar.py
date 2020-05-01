@@ -25,8 +25,8 @@ class ActionInvoker(dbus.service.Object):
     NOTIFICATIONS_DBUS_OBJECT_PATH = '/org/freedesktop/Notifications'
 
     def __init__(self):
-        #bus_name = dbus.service.BusName(self.NOTIFICATIONS_DBUS_INTERFACE, bus=dbus.SessionBus())
-        #dbus.service.Object.__init__(self, bus_name, self.NOTIFICATIONS_DBUS_OBJECT_PATH)
+        # bus_name = dbus.service.BusName(self.NOTIFICATIONS_DBUS_INTERFACE, bus=dbus.SessionBus())
+        # dbus.service.Object.__init__(self, bus_name, self.NOTIFICATIONS_DBUS_OBJECT_PATH)
         super().__init__(
             object_path=self.NOTIFICATIONS_DBUS_OBJECT_PATH,
             bus_name=dbus.service.BusName(
@@ -84,12 +84,12 @@ class TestBar(Gtk.Window):
         self.set_decorated(False)
         self.connect("delete-event", Gtk.main_quit)
 
-        style_provider = Gtk.CssProvider()
-        style_provider.load_from_data(stylesheet)
-        Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(),
-            style_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        # style_provider = Gtk.CssProvider()
+        # style_provider.load_from_data(stylesheet)
+        # Gtk.StyleContext.add_provider_for_screen(
+        #     Gdk.Screen.get_default(),
+        #     style_provider,
+        #     Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         # Layout container
         self.hbox = Gtk.Box(spacing=10)
@@ -240,8 +240,6 @@ class TestBar(Gtk.Window):
         # I don't think this will happen, but working off the label strings seems fragile
         warn(f"No matching action found for button label {button.get_label()}. Actions {self.actions}")
 
-
-
     def quit(self):
         Gtk.main_quit()
 
@@ -252,14 +250,15 @@ if __name__ == "__main__":
     parser.add_argument('-u', '--urgency', choices=urgencies, help=f"Notification urgency {urgencies}",
                         default=urgencies[1])
     parser.add_argument('-n', '--notification', type=int, help="Notification id")
-    parser.add_argument('-m', '--message', type=str, help="Message to display")
-    parser.add_argument('-s', '--summary', type=str)
-    parser.add_argument('-b', '--body', type=str)
+    parser.add_argument('-s', '--summary', type=str, help="Message summary string (may be markup)")
+    parser.add_argument('-b', '--body', type=str, help="Message body (may be markup)")
     parser.add_argument('-a', '--application', type=str)
+    # Notification actions used rather than i3-bar buttons
     # parser.add_argument('-b', '--button', nargs='+')
     parser.add_argument('-t', '--expire-time', type=int, default=-1, dest='timeout')
-    parser.add_argument('-i', '--icon', type=str, required=False, default=None)
-    parser.add_argument('-e', '--actions', action='append', nargs=2, metavar=('identifier', 'name'))
+    parser.add_argument('-i', '--icon', type=str, required=False, default=None, help="Path to icon")
+    parser.add_argument('-e', '--action', dest="actions", action='append', nargs=2, metavar=('identifier', 'name'),
+                        help="Identifer and name for actions")
     # Arguments not needed for now
     # http://www.galago-project.org/specs/notification/0.9/x211.html
     # parser.add_argument('-c', '--category')
