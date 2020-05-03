@@ -85,7 +85,7 @@ class TestBar(Gtk.Window):
         self.connect("delete-event", Gtk.main_quit)
 
         # style_provider = Gtk.CssProvider()
-        # style_provider.load_from_data(stylesheet)
+        # style_provider.from_data(stylesheet)
         # Gtk.StyleContext.add_provider_for_screen(
         #     Gdk.Screen.get_default(),
         #     style_provider,
@@ -95,14 +95,18 @@ class TestBar(Gtk.Window):
         self.hbox = Gtk.Box(spacing=5)
         self.hbox.set_homogeneous(False)
 
+        message_str = "<big>{}</big>".format(self.application)
+
         if icon_path is not None:
-            self._init_icon()
+            if self._try_init_icon():
+                message_str = ""  # Application displayed with icon
 
         self.message = Gtk.Label()
+
         if self.body is None:
-            message_str = "<b>{}</b>".format(self.summary)
+            message_str += "<b>{}</b>".format(self.summary)
         else:
-            message_str = "<b>{}</b>\n{}".format(self.summary, self.body)
+            message_str += "<b>{}</b>\n{}".format(self.summary, self.body)
         self.message.set_markup(message_str)
         self.hbox.pack_start(self.message, False, True, 0)
 
@@ -194,11 +198,9 @@ class TestBar(Gtk.Window):
             Timer(timeout, self.quit).start()
 
         print("Running main loop")
-        self.present()
-        button.grab_focus()
         Gtk.main()
 
-    def _init_icon(self):
+    def _try_init_icon(self) -> bool:
         liststore = Gtk.ListStore(Pixbuf, str)
         iconview = Gtk.IconView.new()
         iconview.set_model(liststore)
@@ -208,9 +210,15 @@ class TestBar(Gtk.Window):
         iconview.set_item_orientation(Gtk.Orientation.HORIZONTAL)
         iconview.set_item_padding(0)
         # TODO: Deal with errors
-        liststore.append([Pixbuf.new_from_file_at_scale(os.path.abspath(self.icon_path), width=24,
-                                                        height=24,
-                                                        preserve_aspect_ratio=True), self.application])
+        ap = os.path.abspath(self.icon_path)
+        print(f"Loading icon from {ap}")
+        # TODO: Icon dimensions should be configurable
+        try:
+            liststore.append([Pixbuf.new_from_file_at_scale(ap, width=24,
+                                                            height=24,
+                                                            preserve_aspect_ratio=True), self.application])
+        except Exception as e:
+            warn(f"Could not load icon {self.icon_path} abspath {ap}. Exception: {e}")
 
         self.hbox.pack_start(iconview, False, False, 0)
 
@@ -255,12 +263,20 @@ if __name__ == "__main__":
                         default=urgencies[1])
     parser.add_argument('-n', '--notification', type=int, help="Notification id")
     parser.add_argument('-s', '--summary', type=str, help="Message summary string (may be markup)")
-    parser.add_argument('-b', '--body', type=str, help="Message body (may be markup)")
-    parser.add_argument('-a', '--application', type=str)
+
+    # Convert empty strings to None, rather than checking each one later
+    def nullable_string(val: str) -> str:
+        print(f"Checking nullable string: {val}")
+        if not val.strip():
+            return None
+        return val
+
+    parser.add_argument('-b', '--body', type=nullable_string, help="Message body (may be markup)")
+    parser.add_argument('-a', '--application', type=nullable_string)
     # Notification actions used rather than i3-bar buttons
     # parser.add_argument('-b', '--button', nargs='+')
     parser.add_argument('-t', '--expire-time', type=int, default=-1, dest='timeout')
-    parser.add_argument('-i', '--icon', type=str, required=False, default=None, help="Path to icon")
+    parser.add_argument('-i', '--icon', type=nullable_string, required=False, default=None, help="Path to icon")
     parser.add_argument('-e', '--action', dest="actions", action='append', nargs=2, metavar=('identifier', 'name'),
                         help="Identifier and name for actions", default=[])
     # Arguments not needed for now
