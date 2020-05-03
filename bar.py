@@ -196,8 +196,9 @@ class TestBar(Gtk.Window):
         print(f"Timeout {self.timeout}")
         self.timer = Event()
         if self.timeout > 0:
+            seconds = timeout / 1000
             def sleep_then_quit():
-                self.timer.wait(timeout)
+                self.timer.wait(seconds)
                 self.quit()
 
             Thread(target=sleep_then_quit).start()
@@ -225,8 +226,10 @@ class TestBar(Gtk.Window):
                                                             preserve_aspect_ratio=True), self.application])
         except Exception as e:
             warn(f"Could not load icon {self.icon_path} abspath {ap}. Exception: {e}")
+            return False
 
         self.hbox.pack_start(iconview, False, False, 0)
+        return True
 
     def _init_action_buttons(self):
         for action in self.actions:
@@ -247,13 +250,11 @@ class TestBar(Gtk.Window):
             if button.get_label() == action[1]:
                 DBusGMainLoop(set_as_default=True)
                 invoker = ActionInvoker()
-
                 invoker.ActionInvoked(self.notification, action[0])
                 invoker.remove_from_connection()
 
                 print(f"Button pressed. Label {button.get_label()}")
-
-                Gtk.main_quit()
+                self.quit()
                 return
 
         # I don't think this will happen, but working off the label strings seems fragile
