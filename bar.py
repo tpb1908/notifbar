@@ -50,15 +50,7 @@ class ActionInvoker(dbus.service.Object):
         pass
 
 
-stylesheet = b"""
-window#bar {
-  background-color: darkred;
-}
-
-GtkWidget { padding-left: 0; padding-right: 0; padding: 0; margin: 0;}
-"""
-
-bar_size = 35
+bar_size = 35  # bar ends up larger than this anyway
 
 
 # Dock bar implementation modified from https://gist.github.com/johnlane/351adff97df196add08a
@@ -66,7 +58,6 @@ class TestBar(Gtk.Window):
 
     def __init__(self, notification: int, summary: str, body: str, application: str, icon_path: Optional[str] = None,
                  timeout: Optional[int] = -1, actions: Optional[List[List]] = None, dismiss: bool = False):
-        # Set up empty window and add style
         Gtk.Window.__init__(self)
 
         # No need to provide a mainloop, as we are only sending
@@ -87,7 +78,7 @@ class TestBar(Gtk.Window):
         self.set_name("bar")
         self.set_type_hint(Gdk.WindowTypeHint.DOCK)
         self.set_decorated(False)
-        self.connect("delete-event", Gtk.main_quit)
+        self.connect("delete-event", self.quit)
 
         # style_provider = Gtk.CssProvider()
         # style_provider.from_data(stylesheet)
@@ -98,28 +89,11 @@ class TestBar(Gtk.Window):
 
         # Layout container
         self.hbox = Gtk.Box(spacing=5)
-        self.hbox.set_homogeneous(False)
+        self.hbox.set_homogeneous(False)  # children have unequal space allocations
 
-        message_str = "<big>{}</big>".format(self.application)
-
-        if icon_path is not None:
-            if self._try_init_icon():
-                message_str = ""  # Application displayed with icon
-
-        self.message = Gtk.Label()
-
-        if self.body is None:
-            message_str += "<b>{}</b>".format(self.summary)
-        else:
-            message_str += "<b>{}</b>\n{}".format(self.summary, self.body)
-        self.message.set_markup(message_str)
-        self.hbox.pack_start(self.message, False, True, 0)
+        self._init_message()  # display application (+icon), summary, and body
 
         self._init_action_buttons()
-        button = Gtk.Button.new_with_mnemonic("_OK")
-        button.connect("clicked", self.done)
-        self.hbox.pack_end(button, False, False, 0)
-
         self.add(self.hbox)
 
         # the screen contains all monitors
@@ -149,9 +123,9 @@ class TestBar(Gtk.Window):
         self.move(x, y)
         self.resize(width, bar_size)
 
+
         # it must be shown before changing properties
         self.show_all()
-        print(f"Window shown. Size {self.get_size()}")
         print(f"Window shown. Size {self.get_size()}")
         # (d) reserve space (a "strut") for the bar so it does not become obscured
         #     when other windows are maximized, etc
@@ -212,7 +186,25 @@ class TestBar(Gtk.Window):
 
         print("Running main loop")
 
+        self.grab_focus()
+        self.present()
         Gtk.main()
+
+    def _init_message(self):
+        message_str = "<big>{}</big>".format(self.application)
+
+        if self.icon_path is not None:
+            if self._try_init_icon():
+                message_str = ""  # Application displayed with icon
+
+        self.message = Gtk.Label()
+
+        if self.body is None:
+            message_str += "<b>{}</b>".format(self.summary)
+        else:
+            message_str += "<b>{}</b>\n{}".format(self.summary, self.body)
+        self.message.set_markup(message_str)
+        self.hbox.pack_start(self.message, False, True, 0)
 
     def _try_init_icon(self) -> bool:
         liststore = Gtk.ListStore(Pixbuf, str)
@@ -223,10 +215,9 @@ class TestBar(Gtk.Window):
         iconview.set_selection_mode(Gtk.SelectionMode.NONE)
         iconview.set_item_orientation(Gtk.Orientation.HORIZONTAL)
         iconview.set_item_padding(0)
-        # TODO: Deal with errors
         ap = os.path.abspath(self.icon_path)
         print(f"Loading icon from {ap}")
-        # TODO: Icon dimensions should be configurable
+        # TODO: How does this icon size work on different screen resoultions?
         try:
             liststore.append([Pixbuf.new_from_file_at_scale(ap, width=24,
                                                             height=24,
@@ -245,7 +236,11 @@ class TestBar(Gtk.Window):
             button = Gtk.Button(label=action[1])
             button.connect("clicked", self.invoke_action)
             self.hbox.pack_end(button, False, False, 0)
-        pass
+        if len(self.actions) == 0:
+            # Add standard dismissal button
+            button = Gtk.Button("OK")
+            button.connect("clicked", self.done)
+            self.hbox.pack_end(button, False, False, 0)
 
     def done(self, button):
         print(f"Button {button.get_label()} clicked")
@@ -283,14 +278,11 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--notification', type=int, help="Notification id")
     parser.add_argument('-s', '--summary', type=str, help="Message summary string (may be markup)")
 
-
     # Convert empty strings to None, rather than checking each one later
-    def nullable_string(val: str) -> str:
-        print(f"Checking nullable string: {val}")
+    def nullable_string(val: str) -> Optional[str]:
         if not val.strip():
             return None
         return val
-
 
     parser.add_argument('-b', '--body', type=nullable_string, help="Message body (may be markup)")
     parser.add_argument('-a', '--application', type=nullable_string)
