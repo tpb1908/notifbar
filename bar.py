@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 from typing import Optional, List
-from threading import Timer
+from threading import Thread, Event
 import os
 import argparse
 from warnings import warn
-
 import gi
 from dbus import SessionBus
 
@@ -12,12 +11,14 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GdkPixbuf', '2.0')
 gi.require_version('Notify', '0.7')
 from gi.repository.GdkPixbuf import Pixbuf
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, GObject
 from Xlib.display import Display
 from Xlib import X
 import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 import dbus.service
+
+GObject.threads_init()
 
 
 class ActionInvoker(dbus.service.Object):
@@ -45,7 +46,6 @@ class ActionInvoker(dbus.service.Object):
         pass
 
 
-# Colour style for (b)
 stylesheet = b"""
 window#bar {
   background-color: darkred;
@@ -193,11 +193,17 @@ class TestBar(Gtk.Window):
         # https://bugzilla.gnome.org/show_bug.cgi?id=622084
         from gi.repository import GLib
 
-        print(f"Timeout {timeout}")
-        if timeout > 0:
-            Timer(timeout, self.quit).start()
+        print(f"Timeout {self.timeout}")
+        self.timer = Event()
+        if self.timeout > 0:
+            def sleep_then_quit():
+                self.timer.wait(timeout)
+                self.quit()
+
+            Thread(target=sleep_then_quit).start()
 
         print("Running main loop")
+
         Gtk.main()
 
     def _try_init_icon(self) -> bool:
@@ -232,6 +238,7 @@ class TestBar(Gtk.Window):
         pass
 
     def done(self, button):
+        print(f"Button {button.get_label()} clicked")
         self.quit()
 
     def invoke_action(self, button):
@@ -253,6 +260,7 @@ class TestBar(Gtk.Window):
         warn(f"No matching action found for button label {button.get_label()}. Actions {self.actions}")
 
     def quit(self):
+        self.timer.set()
         Gtk.main_quit()
 
 
@@ -264,12 +272,14 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--notification', type=int, help="Notification id")
     parser.add_argument('-s', '--summary', type=str, help="Message summary string (may be markup)")
 
+
     # Convert empty strings to None, rather than checking each one later
     def nullable_string(val: str) -> str:
         print(f"Checking nullable string: {val}")
         if not val.strip():
             return None
         return val
+
 
     parser.add_argument('-b', '--body', type=nullable_string, help="Message body (may be markup)")
     parser.add_argument('-a', '--application', type=nullable_string)
