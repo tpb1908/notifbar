@@ -194,6 +194,8 @@ class TestBar(Gtk.Window):
             Timer(timeout, self.quit).start()
 
         print("Running main loop")
+        self.present()
+        button.grab_focus()
         Gtk.main()
 
     def _init_icon(self):
@@ -260,7 +262,7 @@ if __name__ == "__main__":
     parser.add_argument('-t', '--expire-time', type=int, default=-1, dest='timeout')
     parser.add_argument('-i', '--icon', type=str, required=False, default=None, help="Path to icon")
     parser.add_argument('-e', '--action', dest="actions", action='append', nargs=2, metavar=('identifier', 'name'),
-                        help="Identifer and name for actions")
+                        help="Identifier and name for actions", default=[])
     # Arguments not needed for now
     # http://www.galago-project.org/specs/notification/0.9/x211.html
     # parser.add_argument('-c', '--category')
