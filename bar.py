@@ -45,6 +45,10 @@ class ActionInvoker(dbus.service.Object):
     def NotificationClosed(self, id_in, reason_in):
         pass
 
+    @dbus.service.signal(NOTIFICATIONS_DBUS_INTERFACE, signature='u')
+    def CloseNotification(self, id_in):
+        pass
+
 
 stylesheet = b"""
 window#bar {
@@ -61,7 +65,7 @@ bar_size = 35
 class TestBar(Gtk.Window):
 
     def __init__(self, notification: int, summary: str, body: str, application: str, icon_path: Optional[str] = None,
-                 timeout: Optional[int] = -1, actions: Optional[List[List]] = None):
+                 timeout: Optional[int] = -1, actions: Optional[List[List]] = None, dismiss: bool = False):
         # Set up empty window and add style
         Gtk.Window.__init__(self)
 
@@ -78,6 +82,7 @@ class TestBar(Gtk.Window):
         self.icon_path = icon_path
         self.timeout = timeout
         self.actions = actions
+        self.dismiss = dismiss
 
         self.set_name("bar")
         self.set_type_hint(Gdk.WindowTypeHint.DOCK)
@@ -193,6 +198,8 @@ class TestBar(Gtk.Window):
         # https://bugzilla.gnome.org/show_bug.cgi?id=622084
         from gi.repository import GLib
 
+        self.invoker = ActionInvoker()
+
         print(f"Timeout {self.timeout}")
         self.timer = Event()
         if self.timeout > 0:
@@ -249,9 +256,7 @@ class TestBar(Gtk.Window):
         for action in self.actions:
             if button.get_label() == action[1]:
                 DBusGMainLoop(set_as_default=True)
-                invoker = ActionInvoker()
-                invoker.ActionInvoked(self.notification, action[0])
-                invoker.remove_from_connection()
+                self.invoker.ActionInvoked(self.notification, action[0])
 
                 print(f"Button pressed. Label {button.get_label()}")
                 self.quit()
@@ -262,6 +267,11 @@ class TestBar(Gtk.Window):
 
     def quit(self):
         self.timer.set()
+        if self.dismiss:
+            print(f"Dismissing notification {self.notification}")
+            DBusGMainLoop(set_as_default=True)
+            self.invoker.CloseNotification(self.notification)
+            #self.invoker.NotificationClosed(self.notification, 2)  # closed by user
         Gtk.main_quit()
 
 
@@ -290,6 +300,7 @@ if __name__ == "__main__":
     parser.add_argument('-i', '--icon', type=nullable_string, required=False, default=None, help="Path to icon")
     parser.add_argument('-e', '--action', dest="actions", action='append', nargs=2, metavar=('identifier', 'name'),
                         help="Identifier and name for actions", default=[])
+    parser.add_argument('-d', '--dismiss', type=bool, default=False, help="Dismiss notification once viewed")
     # Arguments not needed for now
     # http://www.galago-project.org/specs/notification/0.9/x211.html
     # parser.add_argument('-c', '--category')
@@ -299,4 +310,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
 
-    TestBar(args.notification, args.summary, args.body, args.application, args.icon, args.timeout, args.actions)
+    TestBar(args.notification, args.summary, args.body, args.application, args.icon, args.timeout, args.actions, args.dismiss)
