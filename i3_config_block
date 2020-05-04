@@ -1,0 +1,15 @@
+bindsym $mod+y mode "Notification Action Mode"
+mode "Notification Action Mode" {
+  bindsym $mod+1 exec python3 /path/notifbar/action_sender.py 1
+  bindsym $mod+2 exec python3 /path/notifbar/action_sender.py 2
+  bindsym $mod+3 exec python3 /path/notifbar/action_sender.py 3
+  bindsym $mod+4 exec python3 /path/notifbar/action_sender.py 4
+  bindsym $mod+5 exec python3 /path/notifbar/action_sender.py 5
+  bindsym $mod+6 exec python3 /path/notifbar/action_sender.py 6
+  bindsym $mod+7 exec python3 /path/notifbar/action_sender.py 7
+  bindsym $mod+8 exec python3 /path/notifbar/action_sender.py 8
+  bindsym $mod+9 exec python3 /path/notifbar/action_sender.py 9
+  bindsym Return mode "default"
+  bindsym Escape mode "default"
+  bindsym $mod+y mode "default"
+}

@@ -2,6 +2,7 @@
 from typing import Optional, List
 from threading import Thread
 from time import sleep
+import subprocess
 import os
 import argparse
 from warnings import warn
@@ -111,6 +112,8 @@ class TestBar(Gtk.Window):
             print("monitor %d: %d x %d" % (m, mg.width, mg.height))
             monitors.append(mg)
 
+
+
         # current monitor
         curmon = screen.get_monitor_at_window(screen.get_active_window())
         x = monitors[curmon].x
@@ -185,6 +188,7 @@ class TestBar(Gtk.Window):
             Thread(target=sleep_then_quit, daemon=True).start()
 
         print("Running main loop")
+
         self.thread_action_listener()
         Gtk.main()
 
@@ -262,6 +266,7 @@ class TestBar(Gtk.Window):
 
     def thread_action_listener(self):
         # Have to you process. GIL will block when we call open in a thread
+        self.i3_change_mode("Notification Action Mode")
         Thread(target=self.consumer, daemon=True).start()
 
     def consumer(self):
@@ -280,12 +285,16 @@ class TestBar(Gtk.Window):
                 else:
                     warn(f"Action idx {action_idx} invalid for {len(self.actions)} actions")
 
+    def i3_change_mode(self, mode):
+        subprocess.Popen(("i3-msg", "mode", mode))
+
     def quit(self):
         if self.dismiss:
             print(f"Dismissing notification {self.notification}")
             DBusGMainLoop(set_as_default=True)
             self.invoker.CloseNotification(self.notification)
             # self.invoker.NotificationClosed(self.notification, 2)  # closed by user
+        self.i3_change_mode("default")
         Gtk.main_quit()
 
 
