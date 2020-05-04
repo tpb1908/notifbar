@@ -19,9 +19,6 @@ import dbus
 from dbus.mainloop.glib import DBusGMainLoop
 import dbus.service
 
-GObject.threads_init()
-
-
 class ActionInvoker(dbus.service.Object):
     NOTIFICATIONS_DBUS_INTERFACE = 'org.freedesktop.Notifications'
     NOTIFICATIONS_DBUS_OBJECT_PATH = '/org/freedesktop/Notifications'
@@ -315,5 +312,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     print(args)
-
+    for id, name in args.actions:
+        if not id.isdigit():
+            print(f"Action identifiers must be integers. Found {id} {name}")
+            exit(2)
     TestBar(args.notification, args.summary, args.body, args.application, args.icon, args.timeout, args.actions, args.dismiss)
