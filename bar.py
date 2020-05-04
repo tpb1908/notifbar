@@ -280,8 +280,10 @@ class TestBar(Gtk.Window):
                 warn(f"Received message {message} which is not digit")
             else:
                 action_idx = int(message)
-                if len(self.actions) > action_idx > 0:
-                    self.invoke_action(self.actions[action_idx][0])
+                if len(self.actions) == 0:
+                    self.quit()  # Dismissing notification if flag set
+                elif len(self.actions) > action_idx > 1:
+                    self.invoke_action(self.actions[action_idx-1][0])
                 else:
                     warn(f"Action idx {action_idx} invalid for {len(self.actions)} actions")
 
