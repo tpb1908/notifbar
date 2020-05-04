@@ -6,6 +6,7 @@ import argparse
 from warnings import warn
 import gi
 from dbus import SessionBus
+import zmq
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('GdkPixbuf', '2.0')
@@ -55,6 +56,8 @@ bar_size = 35  # bar ends up larger than this anyway
 
 # Dock bar implementation modified from https://gist.github.com/johnlane/351adff97df196add08a
 class TestBar(Gtk.Window):
+
+    ACTION_PIPE = "/tmp/notif-nagbar-pip.fifo"
 
     def __init__(self, notification: int, summary: str, body: str, application: str, icon_path: Optional[str] = None,
                  timeout: Optional[int] = -1, actions: Optional[List[List]] = None, dismiss: bool = False):
@@ -185,9 +188,7 @@ class TestBar(Gtk.Window):
             Thread(target=sleep_then_quit).start()
 
         print("Running main loop")
-
-        self.grab_focus()
-        self.present()
+        self.thread_action_listener()
         Gtk.main()
 
     def _init_message(self):
@@ -259,6 +260,19 @@ class TestBar(Gtk.Window):
 
         # I don't think this will happen, but working off the label strings seems fragile
         warn(f"No matching action found for button label {button.get_label()}. Actions {self.actions}")
+
+    def thread_action_listener(self):
+        # Have to you process. GIL will block when we call open in a thread
+        Thread(target=self.consumer).start()
+
+    def consumer(self):
+        context = zmq.Context()
+        # recieve work
+        consumer_receiver = context.socket(zmq.PULL)
+        consumer_receiver.connect("tcp://127.0.0.1:5557")
+        while True:
+            work = consumer_receiver.recv_string()  # utf-8 string
+            print(f"Received work {work}")
 
     def quit(self):
         self.timer.set()
